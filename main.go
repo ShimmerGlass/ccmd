@@ -39,6 +39,12 @@ func getConsul(c *cli.Context) *api.Client {
 	return consul
 }
 
+func getRunOpts(c *cli.Context) cmd.Options {
+	return cmd.Options{
+		Parralel: c.GlobalInt("parallel"),
+	}
+}
+
 func main() {
 	app := cli.NewApp()
 
@@ -48,6 +54,11 @@ func main() {
 			Value:  "http://127.0.0.1:8500",
 			Usage:  "Consul agent address",
 			EnvVar: "CONSUL_ADDR",
+		},
+		cli.IntFlag{
+			Name:  "parallel, p",
+			Value: 1,
+			Usage: "Run N commands in parallel. -1 for all commands in parallel.",
 		},
 	}
 
@@ -63,7 +74,7 @@ func main() {
 					return err
 				}
 
-				return cmd.Run([]string(c.Args()), args)
+				return cmd.Run([]string(c.Args()), args, getRunOpts(c))
 			},
 		},
 		{
@@ -92,7 +103,7 @@ func main() {
 					return err
 				}
 
-				return cmd.Run([]string(c.Args()), args)
+				return cmd.Run([]string(c.Args()), args, getRunOpts(c))
 			},
 		},
 	}

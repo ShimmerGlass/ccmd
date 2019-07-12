@@ -4,21 +4,45 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sync"
 
 	"github.com/aestek/ccmd/tmpl"
 )
 
-func Run(cmd []string, instances []map[string]string) error {
+type Options struct {
+	Parralel int
+}
+
+func Run(cmd []string, instances []map[string]string, opts Options) error {
 	if len(cmd) == 0 {
 		return fmt.Errorf("command cannot be empty")
 	}
-
-	for _, i := range instances {
-		err := runOne(cmd, i)
-		if err != nil {
-			return err
-		}
+	if opts.Parralel == 0 {
+		opts.Parralel = 1
 	}
+	if opts.Parralel == -1 {
+		opts.Parralel = len(instances)
+	}
+
+	c := make(chan map[string]string, len(instances))
+	for _, i := range instances {
+		c <- i
+	}
+	close(c)
+
+	var wg sync.WaitGroup
+	wg.Add(opts.Parralel)
+
+	for i := 0; i < opts.Parralel; i++ {
+		go func() {
+			for i := range c {
+				runOne(cmd, i)
+			}
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
 
 	return nil
 }
