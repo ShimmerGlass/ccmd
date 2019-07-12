@@ -11,6 +11,10 @@ import (
 	"github.com/fatih/color"
 )
 
+func init() {
+	color.NoColor = false
+}
+
 var wrapperColors = []color.Attribute{
 	color.FgRed,
 	color.FgGreen,
@@ -46,14 +50,19 @@ func (w *ioWrapper) Write(b []byte) (int, error) {
 			break
 		}
 
-		r = append(r, p...)
 		r = append(r, b[offset:offset+nextL+1]...)
-		offset = nextL + 1
+
+		if offset+nextL < len(b)-1 {
+			r = append(r, p...)
+		}
+
+		offset = offset + nextL + 1
 	}
 
-	w.inner.Write(r)
+	w.spliced = b[len(b)-1] != '\n'
 
-	return len(b), nil
+	_, err := w.inner.Write(r)
+	return len(b), err
 }
 
 func newIOWrapper(args map[string]string, used []string, lvl int, target io.Writer) io.Writer {
