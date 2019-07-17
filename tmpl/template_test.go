@@ -20,8 +20,9 @@ func TestOnlyVar(t *testing.T) {
 }
 
 func TestUndefinedVar(t *testing.T) {
-	_, err := Exec("{var}", map[string]string{"nope": "ok"})
-	require.NotNil(t, err)
+	r, err := Exec("{var}", map[string]string{"nope": "ok"})
+	require.Nil(t, err)
+	require.Equal(t, "{var}", r)
 }
 
 func TestEnclosedVar(t *testing.T) {

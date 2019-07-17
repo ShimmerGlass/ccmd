@@ -2,18 +2,22 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"sync"
+
+	"strings"
 
 	"github.com/aestek/ccmd/tmpl"
 )
 
 type Options struct {
 	Parralel int
+	NoPrefix bool
 }
 
-func Run(cmd []string, instances []map[string]string, opts Options) error {
+func Run(cmd []string, instances []interface{}, opts Options) error {
 	if len(cmd) == 0 {
 		return fmt.Errorf("command cannot be empty")
 	}
@@ -24,40 +28,112 @@ func Run(cmd []string, instances []map[string]string, opts Options) error {
 		opts.Parralel = len(instances)
 	}
 
-	c := make(chan map[string]string, len(instances))
-	for _, i := range instances {
-		c <- i
+	cmdt, err := compileCmd(cmd)
+	if err != nil {
+		return err
 	}
-	close(c)
+
+	instanceArgs := make([]map[string]string, len(instances))
+	prefixes := make([]string, len(instances))
+	maxPrefixLength := 0
+
+	for i, inst := range instances {
+		args, err := getArgs(inst)
+		if err != nil {
+			return err
+		}
+		instanceArgs[i] = args
+	}
+
+	if !opts.NoPrefix {
+		for i, inst := range instanceArgs {
+			a := cmdArgs(cmdt, inst)
+			p := getPrefix(a)
+			if len(p) > maxPrefixLength {
+				maxPrefixLength = len(p)
+			}
+			prefixes[i] = p
+		}
+	}
+
+	consoleWriterOut := &consoleWriter{
+		inner:           os.Stdout,
+		maxPrefixLength: maxPrefixLength,
+	}
+	consoleWriterErr := &consoleWriter{
+		inner:           os.Stderr,
+		maxPrefixLength: maxPrefixLength,
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(opts.Parralel)
 
+	type instance struct {
+		args map[string]string
+		idx  int
+	}
+	c := make(chan instance)
+
 	for i := 0; i < opts.Parralel; i++ {
 		go func() {
 			for i := range c {
-				runOne(cmd, i)
+				stdOut := &writerAdapter{inner: consoleWriterOut, prefix: prefixes[i.idx]}
+				stdErr := &writerAdapter{inner: consoleWriterErr, prefix: prefixes[i.idx]}
+				runOne(cmdt, i.args, stdOut, stdErr)
 			}
 			wg.Done()
 		}()
 	}
+
+	go func() {
+		for i, args := range instanceArgs {
+			c <- instance{
+				args: args,
+				idx:  i,
+			}
+		}
+		close(c)
+	}()
 
 	wg.Wait()
 
 	return nil
 }
 
-func runOne(cmd []string, args map[string]string) error {
-	usedArgs := []string{}
-
-	tcmd := []string{}
-	for _, i := range cmd {
-		t, err := tmpl.Parse(i)
+func compileCmd(cmd []string) ([]*tmpl.Template, error) {
+	res := make([]*tmpl.Template, len(cmd))
+	for i, p := range cmd {
+		t, err := tmpl.Parse(p)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		usedArgs = append(usedArgs, t.Vars...)
-		tcmd = append(tcmd, t.Exec(args))
+		res[i] = t
+	}
+	return res, nil
+}
+
+func cmdArgs(cmd []*tmpl.Template, allArgs map[string]string) map[string]string {
+	res := map[string]string{}
+	for _, p := range cmd {
+		for _, k := range p.Vars {
+			v, ok := allArgs[k]
+			if !ok {
+				continue
+			}
+			res[k] = v
+		}
+	}
+	return res
+}
+
+func runOne(cmdt []*tmpl.Template, args map[string]string, stdOut, stdErr io.Writer) {
+	tcmd := []string{}
+	for _, i := range cmdt {
+		tcmd = append(tcmd, i.Exec(args))
+	}
+
+	if len(tcmd) == 1 && strings.ContainsAny(tcmd[0], " \t\n") {
+		tcmd = []string{os.Getenv("SHELL"), "-c", tcmd[0]}
 	}
 
 	cmdArgs := []string{}
@@ -66,8 +142,8 @@ func runOne(cmd []string, args map[string]string) error {
 	}
 
 	c := exec.Command(tcmd[0], cmdArgs...)
-	c.Stdout = newIOWrapper(args, usedArgs, 1, os.Stdout)
-	c.Stderr = newIOWrapper(args, usedArgs, 1, os.Stderr)
+	c.Stdout = stdOut
+	c.Stderr = stdErr
 
 	env := os.Environ()
 	for k, v := range args {
@@ -75,5 +151,8 @@ func runOne(cmd []string, args map[string]string) error {
 	}
 	c.Env = env
 
-	return c.Run()
+	err := c.Run()
+	if err != nil {
+		stdErr.Write([]byte(err.Error()))
+	}
 }

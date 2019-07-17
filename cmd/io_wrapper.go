@@ -7,6 +7,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 )
@@ -24,18 +25,29 @@ var wrapperColors = []color.Attribute{
 	color.FgCyan,
 }
 
-type ioWrapper struct {
-	spliced bool
-	prefix  string
-	inner   io.Writer
+type consoleWriter struct {
+	spliced         bool
+	splicedPrefix   string
+	maxPrefixLength int
+	inner           io.Writer
+	lock            sync.Mutex
 }
 
-func (w *ioWrapper) Write(b []byte) (int, error) {
-	p := []byte(w.prefix)
+func (w *consoleWriter) Write(prefix string, b []byte) (int, error) {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
+	p := []byte(prefix)
 	r := []byte{}
 
-	if !w.spliced {
+	if w.spliced && w.splicedPrefix != prefix {
+		r = append(r, '\n')
+	}
+	if !w.spliced || w.splicedPrefix != prefix {
 		r = append(r, p...)
+		if len(p) <= w.maxPrefixLength {
+			r = append(r, bytes.Repeat([]byte{' '}, w.maxPrefixLength-len(p))...)
+		}
 	}
 
 	offset := 0
@@ -60,27 +72,42 @@ func (w *ioWrapper) Write(b []byte) (int, error) {
 	}
 
 	w.spliced = b[len(b)-1] != '\n'
+	w.splicedPrefix = prefix
 
 	_, err := w.inner.Write(r)
 	return len(b), err
 }
 
-func newIOWrapper(args map[string]string, used []string, lvl int, target io.Writer) io.Writer {
-	sort.Strings(used)
-	parts := []string{}
-	for _, u := range used {
-		v, ok := args[u]
-		if !ok {
-			continue
+type writerAdapter struct {
+	prefix string
+	inner  *consoleWriter
+}
+
+func (w *writerAdapter) Write(b []byte) (int, error) {
+	return w.inner.Write(w.prefix, b)
+}
+
+func getPrefix(args map[string]string) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	var prefix string
+
+	if len(args) == 1 {
+		for _, v := range args {
+			prefix = v + ": "
+			break
 		}
-		parts = append(parts, fmt.Sprintf("%s=%s", u, v))
-	}
+	} else {
+		parts := []string{}
+		for k, v := range args {
+			parts = append(parts, fmt.Sprintf("%s=%s", k, v))
+		}
 
-	if len(parts) == 0 {
-		return target
+		sort.Strings(parts)
+		prefix = strings.Join(parts, " ") + ": "
 	}
-
-	prefix := strings.Join(parts, ",") + ": "
 
 	h := fnv.New32()
 	h.Write([]byte(prefix))
@@ -88,10 +115,5 @@ func newIOWrapper(args map[string]string, used []string, lvl int, target io.Writ
 
 	att := wrapperColors[int(i)%len(wrapperColors)]
 	d := color.New(att)
-	prefix = d.Sprint(prefix)
-
-	return &ioWrapper{
-		prefix: prefix,
-		inner:  target,
-	}
+	return d.Sprint(prefix)
 }

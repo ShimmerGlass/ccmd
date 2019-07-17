@@ -79,7 +79,7 @@ func (t *Template) Exec(args map[string]string) string {
 			if !ok {
 				res += "{" + string(v) + "}"
 			} else {
-				res += val
+				res += fmt.Sprint(val)
 			}
 		default:
 			panic(fmt.Sprintf("bad elem %T", e))
