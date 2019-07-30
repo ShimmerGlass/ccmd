@@ -17,6 +17,7 @@ func init() {
 		Name:      "agent-services",
 		Usage:     "Runs the commmand passed as argument for agent services",
 		UsageText: modelHelp(reflect.ValueOf(agentServiceArgs{})),
+		ArgsUsage: "Command to run",
 		Action: func(c *cli.Context) error {
 			consul := getConsul(c)
 
@@ -34,7 +35,7 @@ func init() {
 				})
 			}
 
-			return run(c, args)
+			return run(c, c.Args(), args)
 		},
 	})
 

@@ -37,7 +37,7 @@ func (w *consoleWriter) Write(prefix string, b []byte) (int, error) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	p := []byte(prefix)
+	p := []byte(prefix + ": ")
 	r := []byte{}
 
 	if w.spliced && w.splicedPrefix != prefix {
@@ -87,16 +87,16 @@ func (w *writerAdapter) Write(b []byte) (int, error) {
 	return w.inner.Write(w.prefix, b)
 }
 
-func getPrefix(args map[string]string) string {
+func getVarsDesc(args map[string]string, short bool) string {
 	if len(args) == 0 {
 		return ""
 	}
 
 	var prefix string
 
-	if len(args) == 1 {
+	if len(args) == 1 && short {
 		for _, v := range args {
-			prefix = v + ": "
+			prefix = v
 			break
 		}
 	} else {
@@ -106,7 +106,7 @@ func getPrefix(args map[string]string) string {
 		}
 
 		sort.Strings(parts)
-		prefix = strings.Join(parts, " ") + ": "
+		prefix = strings.Join(parts, " ")
 	}
 
 	h := fnv.New32()

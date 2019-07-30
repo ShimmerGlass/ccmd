@@ -10,7 +10,9 @@ import (
 
 func main() {
 	app := cli.NewApp()
-
+	app.Name = "Consul run command"
+	app.Description = "Run a templated command based on consul data."
+	app.ArgsUsage = "[command to run]"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:   "consul, c",
@@ -25,7 +27,7 @@ func main() {
 		},
 		cli.BoolFlag{
 			Name:  "no-prefix, n",
-			Usage: "DO not prefix output by used variables",
+			Usage: "Do not prefix output by used variables",
 		},
 	}
 

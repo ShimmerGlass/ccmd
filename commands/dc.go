@@ -30,7 +30,7 @@ func init() {
 				})
 			}
 
-			return run(c, args)
+			return run(c, c.Args(), args)
 		},
 	})
 }

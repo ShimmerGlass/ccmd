@@ -18,19 +18,13 @@ type Options struct {
 }
 
 func Run(cmd []string, instances []interface{}, opts Options) error {
-	if len(cmd) == 0 {
-		return fmt.Errorf("command cannot be empty")
-	}
+	hasCmd := len(cmd) > 0
+
 	if opts.Parralel == 0 {
 		opts.Parralel = 1
 	}
 	if opts.Parralel == -1 {
 		opts.Parralel = len(instances)
-	}
-
-	cmdt, err := compileCmd(cmd)
-	if err != nil {
-		return err
 	}
 
 	instanceArgs := make([]map[string]string, len(instances))
@@ -42,13 +36,24 @@ func Run(cmd []string, instances []interface{}, opts Options) error {
 		if err != nil {
 			return err
 		}
+		if !hasCmd {
+			fmt.Println(getVarsDesc(args, false))
+		}
 		instanceArgs[i] = args
+	}
+	if !hasCmd {
+		return nil
+	}
+
+	cmdt, err := compileCmd(cmd)
+	if err != nil {
+		return err
 	}
 
 	if !opts.NoPrefix {
 		for i, inst := range instanceArgs {
 			a := cmdArgs(cmdt, inst)
-			p := getPrefix(a)
+			p := getVarsDesc(a, true)
 			if len(p) > maxPrefixLength {
 				maxPrefixLength = len(p)
 			}

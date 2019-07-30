@@ -1,7 +1,9 @@
 package commands
 
 import (
+	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/urfave/cli"
@@ -20,41 +22,59 @@ func init() {
 		Name:      "service",
 		Usage:     "Runs the commmand passed as argument for each service instances",
 		UsageText: modelHelp(reflect.ValueOf(serviceInstanceArgs{})),
+		ArgsUsage: "[SERVICE] [CMD...]",
 		Flags: []cli.Flag{
-			cli.StringFlag{
-				Name:  "service, s",
-				Usage: "Service to get instances from",
-			},
 			dcFlag,
 			filterFlag,
+			watchFlag,
 		},
 		Action: func(c *cli.Context) error {
 			consul := getConsul(c)
 
-			svcs, _, err := consul.Health().Service(c.String("service"), "", false, &api.QueryOptions{
-				Datacenter: c.String("dc"),
-			})
-			if err != nil {
-				return err
+			if len(c.Args()) == 0 {
+				return fmt.Errorf("please provide the service as first argument")
 			}
 
-			args := []interface{}{}
-			for _, d := range svcs {
-				args = append(args, serviceInstanceArgs{
-					NodeName:       d.Node.Node,
-					ServiceName:    d.Service.Service,
-					ServiceTags:    d.Service.Tags,
-					InstanceID:     d.Service.ID,
-					InstanceHealth: d.Checks.AggregatedStatus(),
+			service := c.Args()[0]
+
+			var idx uint64
+			for {
+				svcs, meta, err := consul.Health().Service(service, "", false, &api.QueryOptions{
+					WaitIndex:  idx,
+					WaitTime:   10 * time.Minute,
+					Datacenter: c.String("dc"),
 				})
+				if err != nil {
+					return err
+				}
+				idx = meta.LastIndex
+
+				args := []interface{}{}
+				for _, d := range svcs {
+					args = append(args, serviceInstanceArgs{
+						NodeName:       d.Node.Node,
+						ServiceName:    d.Service.Service,
+						ServiceTags:    d.Service.Tags,
+						InstanceID:     d.Service.ID,
+						InstanceHealth: d.Checks.AggregatedStatus(),
+					})
+				}
+
+				args, err = filter(c, args, []serviceInstanceArgs{})
+				if err != nil {
+					return err
+				}
+
+				err = run(c, c.Args()[1:], args)
+				if err != nil {
+					return err
+				}
+				if !c.Bool("watch") {
+					break
+				}
 			}
 
-			args, err = filter(c, args, []serviceInstanceArgs{})
-			if err != nil {
-				return err
-			}
-
-			return run(c, args)
+			return nil
 		},
 	})
 

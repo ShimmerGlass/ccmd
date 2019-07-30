@@ -20,6 +20,10 @@ var (
 		Name:  "dc",
 		Usage: "Datacenter to target (default the agent's datacenter)",
 	}
+	watchFlag = cli.BoolFlag{
+		Name:  "watch, w",
+		Usage: "Watch for changes and run the command each time",
+	}
 )
 
 var Commands []cli.Command
@@ -46,8 +50,8 @@ func getRunOpts(c *cli.Context) cmd.Options {
 	}
 }
 
-func run(c *cli.Context, args []interface{}) error {
-	return cmd.Run([]string(c.Args()), args, getRunOpts(c))
+func run(c *cli.Context, command []string, args []interface{}) error {
+	return cmd.Run(command, args, getRunOpts(c))
 }
 
 func filter(c *cli.Context, args []interface{}, model interface{}) ([]interface{}, error) {
