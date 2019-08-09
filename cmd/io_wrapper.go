@@ -2,11 +2,7 @@ package cmd
 
 import (
 	"bytes"
-	"fmt"
-	"hash/fnv"
 	"io"
-	"sort"
-	"strings"
 	"sync"
 
 	"github.com/fatih/color"
@@ -85,35 +81,4 @@ type writerAdapter struct {
 
 func (w *writerAdapter) Write(b []byte) (int, error) {
 	return w.inner.Write(w.prefix, b)
-}
-
-func getVarsDesc(args map[string]string, short bool) string {
-	if len(args) == 0 {
-		return ""
-	}
-
-	var prefix string
-
-	if len(args) == 1 && short {
-		for _, v := range args {
-			prefix = v
-			break
-		}
-	} else {
-		parts := []string{}
-		for k, v := range args {
-			parts = append(parts, fmt.Sprintf("%s=%s", k, v))
-		}
-
-		sort.Strings(parts)
-		prefix = strings.Join(parts, " ")
-	}
-
-	h := fnv.New32()
-	h.Write([]byte(prefix))
-	i := h.Sum32()
-
-	att := wrapperColors[int(i)%len(wrapperColors)]
-	d := color.New(att)
-	return d.Sprint(prefix)
 }
