@@ -1,14 +1,14 @@
 language: go
+go_import_path: github.com/aestek/ccmd
 go:
 - 1.x
 script:
-- go get -u
 - mkdir -p build/linux
-- GOOS=linux go build
+- env GO111MODULE=on GOOS=linux go build -o build/linux/ccmd
 - mkdir -p build/windows
-- GOOS=windows go build
+- env GO111MODULE=on GOOS=windows go build -o build/windows/ccmd.exe
 - mkdir -p build/darwin
-- GOOS=darwin go build
+- env GO111MODULE=on GOOS=darwin go build -o build/darwin/ccmd
 sudo: false
 before_deploy:
 - echo "Deploying $TRAVIS_TAG to GitHub releases"
@@ -18,9 +18,9 @@ before_deploy:
 deploy:
   provider: releases
   api_key:
-    secure: fnPYHcnaijPVMtE7ePMW2elY6J1Z3se8NWtn4QBcjV5QZ8bdBVYNNa9GMu/HGChqI+AEiOIVpe+2+uyTUDSyWFvaIAVReVYBintBlfBS4A1L2TxSD+Cq/EcOPefPoEFEv9BzLycTk9zVoSJGKHXCaPvpDFmlDGjgP4/JELvsy5y8wokiYD9/nYKxxolBkr0jKjxhKhqsiBQ6IrWIFfmjTs73uTch1T4IJAkrdZZ4j8XgCLKC51D/7z6fEvjGi3Rgbd4NFpSjSQKbnbdEU1Syky1g3HHOII7GIEu8Ty6Wfi+N3xZ/veDr8jmPdpka6p2SSsRSDuttgwRVP421zCehrakDWO4EJ/Gic4WZ5CsT2k1ydymZZH6UMmkSBBhefmVnWRCCF4Ugh9V8Inpe/8KvmqCqb27Cnz/NrQhO4ecJQPG096fA8Sg53bIlqpolFFElm0wVAw0601Dp5/5QZ+txhzLHXOEmRaQ2hIw56foWdOZzOcHoob/b3SIS2syA0Qb/+D5llhnbkan9FcsqNbSSxQLNPjIgxM3/ZIK91REvExVWXncO7N40tqR/rVhCKN1EZ7levN02g3rBBOCpwfpsgczSAUlf9j7RgzeAqd3rnfO7hHTUCmTID9ltWoJnrGXprNBm7P1K2NYhMr02szsfTUULxWz1xtZblXMGOrEjmWY=
+    secure: M8Vmm6ou9WRK8uIqppqZ0bmZczNrOmE3Q0UjiLL/pBwSj8l9MWVny9K1Ipid+g80nhMdusKlGHDQEHmCnz1BhYjr907htgjj+ZBx1A8HSaIuUlKtgtst0hF+qRbLZShoyTNvBnFW5IbeNkLlJz/4CG9sDTNtM5w6P9lHbHnqRmQzcENq8rppcgZuJgtQZsivuNUIyExt3ku8WXcwxG0e6f6HwhSuKH1ymA6ceBHnhaVNCHBV31sAu7aNO/aNAcc40KrVdQP24h0sPyZtVeueON3Iu9Gk3FruCCu8we9HEi5bWMWg1Bi0jcAyNK8N8U7yAK/PCrnaPgwPC/GVQU2beuNhL+wqglMMnybGL/pK30PzHxbNl36UzEUV0wpLgQQoQCyfMOtNgQtmVWvqUm7Rw0hTTo6VYkLFEA2xADEBQLXxL3zQ+M/sNIyqaICC8CfFfhlF62B2Oo8IOSh5PLsdgCZqXyoEQnluSl0fW/HnvNrO1eKyydzrN7NNV/+hFvgy+4AS3WgH2eJkSNaLPORMcRDB2koxsrsvdFBgG2pdM3wuVEveXKPPhCtQMDGF4RayR4SvU/werKKCCVJodHc2G4OQCFbSNPNbzbjwtuSoaeufiRyomwKUQWAjUVr3YSqJaupmoy1KjGqtf6qdKPDL1Mmq01URCFym1pmi+58ftME=
   file: build/*/*.tar.gz
   skip_cleanup: true
   on:
-    repo: aestek/ccmd
+    repo: Aestek/ccmd
     tags: true
