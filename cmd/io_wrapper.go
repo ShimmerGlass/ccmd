@@ -25,11 +25,10 @@ type consoleWriter struct {
 	spliced         bool
 	splicedPrefix   string
 	maxPrefixLength int
-	inner           io.Writer
 	lock            sync.Mutex
 }
 
-func (w *consoleWriter) Write(prefix string, b []byte) (int, error) {
+func (w *consoleWriter) Write(target io.Writer, prefix string, b []byte) (int, error) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -70,15 +69,16 @@ func (w *consoleWriter) Write(prefix string, b []byte) (int, error) {
 	w.spliced = b[len(b)-1] != '\n'
 	w.splicedPrefix = prefix
 
-	_, err := w.inner.Write(r)
+	_, err := target.Write(r)
 	return len(b), err
 }
 
 type writerAdapter struct {
 	prefix string
 	inner  *consoleWriter
+	target io.Writer
 }
 
 func (w *writerAdapter) Write(b []byte) (int, error) {
-	return w.inner.Write(w.prefix, b)
+	return w.inner.Write(w.target, w.prefix, b)
 }

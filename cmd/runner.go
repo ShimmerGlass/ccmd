@@ -13,18 +13,20 @@ import (
 )
 
 type Options struct {
-	Parralel int
+	Parallel int
 	NoPrefix bool
 }
 
 func Run(cmd []string, instances []interface{}, opts Options) error {
-	hasCmd := len(cmd) > 0
-
-	if opts.Parralel == 0 {
-		opts.Parralel = 1
+	if len(cmd) == 0 {
+		return runPrint(cmd, instances, opts)
 	}
-	if opts.Parralel == -1 {
-		opts.Parralel = len(instances)
+
+	if opts.Parallel == 0 {
+		opts.Parallel = 1
+	}
+	if opts.Parallel == -1 {
+		opts.Parallel = len(instances)
 	}
 
 	instanceArgs := make([]map[string]string, len(instances))
@@ -36,13 +38,7 @@ func Run(cmd []string, instances []interface{}, opts Options) error {
 		if err != nil {
 			return err
 		}
-		if !hasCmd {
-			fmt.Println(getVarsDesc(args, false))
-		}
 		instanceArgs[i] = args
-	}
-	if !hasCmd {
-		return nil
 	}
 
 	cmdt, err := compileCmd(cmd)
@@ -61,17 +57,12 @@ func Run(cmd []string, instances []interface{}, opts Options) error {
 		}
 	}
 
-	consoleWriterOut := &consoleWriter{
-		inner:           os.Stdout,
-		maxPrefixLength: maxPrefixLength,
-	}
-	consoleWriterErr := &consoleWriter{
-		inner:           os.Stderr,
+	writer := &consoleWriter{
 		maxPrefixLength: maxPrefixLength,
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(opts.Parralel)
+	wg.Add(opts.Parallel)
 
 	type instance struct {
 		args map[string]string
@@ -79,11 +70,15 @@ func Run(cmd []string, instances []interface{}, opts Options) error {
 	}
 	c := make(chan instance)
 
-	for i := 0; i < opts.Parralel; i++ {
+	for i := 0; i < opts.Parallel; i++ {
 		go func() {
 			for i := range c {
-				stdOut := &writerAdapter{inner: consoleWriterOut, prefix: prefixes[i.idx]}
-				stdErr := &writerAdapter{inner: consoleWriterErr, prefix: prefixes[i.idx]}
+				var stdOut io.Writer = os.Stdout
+				var stdErr io.Writer = os.Stderr
+				if !opts.NoPrefix {
+					stdOut = &writerAdapter{target: os.Stdout, inner: writer, prefix: prefixes[i.idx]}
+					stdErr = &writerAdapter{target: os.Stderr, inner: writer, prefix: prefixes[i.idx]}
+				}
 				runOne(cmdt, i.args, stdOut, stdErr)
 			}
 			wg.Done()
@@ -101,6 +96,18 @@ func Run(cmd []string, instances []interface{}, opts Options) error {
 	}()
 
 	wg.Wait()
+
+	return nil
+}
+
+func runPrint(cmd []string, instances []interface{}, opts Options) error {
+	for _, inst := range instances {
+		args, err := getArgs(inst)
+		if err != nil {
+			return err
+		}
+		fmt.Println(getVarsDesc(args, false))
+	}
 
 	return nil
 }

@@ -45,7 +45,7 @@ func getConsul(c *cli.Context) *api.Client {
 
 func getRunOpts(c *cli.Context) cmd.Options {
 	return cmd.Options{
-		Parralel: c.GlobalInt("parallel"),
+		Parallel: c.GlobalInt("parallel"),
 		NoPrefix: c.GlobalBool("no-prefix"),
 	}
 }
