@@ -8,10 +8,6 @@ import (
 	"github.com/fatih/color"
 )
 
-func init() {
-	color.NoColor = false
-}
-
 var wrapperColors = []color.Attribute{
 	color.FgRed,
 	color.FgGreen,

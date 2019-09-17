@@ -16,13 +16,13 @@ var (
 		Name:  "filter, f",
 		Usage: "Filter result",
 	}
-	dcFlag = cli.StringFlag{
+	dcsFlag = cli.StringSliceFlag{
 		Name:  "dc",
-		Usage: "Datacenter to target (default the agent's datacenter)",
+		Usage: "Datacenters to target (default the agent's datacenter)",
 	}
-	watchFlag = cli.BoolFlag{
-		Name:  "watch, w",
-		Usage: "Watch for changes and run the command each time",
+	allDcsFlag = cli.BoolFlag{
+		Name:  "all-dcs",
+		Usage: "Target all datacenters (default the agent's datacenter)",
 	}
 )
 
@@ -50,25 +50,29 @@ func getRunOpts(c *cli.Context) cmd.Options {
 	}
 }
 
-func run(c *cli.Context, command []string, args []interface{}) error {
+func run(c *cli.Context, command []string, args chan interface{}) error {
 	return cmd.Run(command, args, getRunOpts(c))
 }
 
-func filter(c *cli.Context, args []interface{}, model interface{}) ([]interface{}, error) {
+func filter(c *cli.Context, model interface{}) func(interface{}) bool {
 	if c.String("filter") == "" {
-		return args, nil
-	}
-	f, err := bexpr.CreateFilter(c.String("filter"), &bexpr.EvaluatorConfig{}, model)
-	if err != nil {
-		return nil, err
+		return func(interface{}) bool {
+			return true
+		}
 	}
 
-	argsif, err := f.Execute(args)
+	evaluator, err := bexpr.CreateEvaluatorForType(c.String("filter"), &bexpr.EvaluatorConfig{}, model)
 	if err != nil {
-		return nil, err
+		log.Fatal(err)
 	}
 
-	return argsif.([]interface{}), nil
+	return func(d interface{}) bool {
+		r, err := evaluator.Evaluate(d)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return r
+	}
 }
 
 func modelHelp(typ reflect.Value) string {
@@ -86,4 +90,20 @@ func modelHelp(typ reflect.Value) string {
 		res += "\n"
 	}
 	return res
+}
+
+func getDcs(c *cli.Context, consul *api.Client) []string {
+	if c.Bool("all-dcs") {
+		dcs, err := consul.Catalog().Datacenters()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		return dcs
+	}
+	if len(c.StringSlice("dc")) > 0 {
+		return c.StringSlice("dc")
+	}
+
+	return []string{""}
 }

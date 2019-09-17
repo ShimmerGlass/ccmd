@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"fmt"
+	"log"
 	"reflect"
 
 	"github.com/hashicorp/consul/api"
@@ -19,31 +19,36 @@ func init() {
 		Usage:     "Runs the commmand passed as argument for catalog service",
 		UsageText: modelHelp(reflect.ValueOf(serviceArgs{})),
 		Flags: []cli.Flag{
-			dcFlag,
+			dcsFlag,
+			allDcsFlag,
 			filterFlag,
 		},
 		Action: func(c *cli.Context) error {
 			consul := getConsul(c)
+			args := make(chan interface{})
+			match := filter(c, serviceArgs{})
 
-			svcs, _, err := consul.Catalog().Services(&api.QueryOptions{
-				Datacenter: c.String("dc"),
-			})
-			if err != nil {
-				return fmt.Errorf("error fetching dcs: %s", err)
-			}
+			go func() {
+				for _, dc := range getDcs(c, consul) {
+					svcs, _, err := consul.Catalog().Services(&api.QueryOptions{
+						Datacenter: dc,
+					})
+					if err != nil {
+						log.Fatalf("error fetching catalog: %s", err)
+					}
 
-			args := []interface{}{}
-			for s, tags := range svcs {
-				args = append(args, serviceArgs{
-					ServiceName: s,
-					ServiceTags: tags,
-				})
-			}
-
-			args, err = filter(c, args, []serviceArgs{})
-			if err != nil {
-				return err
-			}
+					for s, tags := range svcs {
+						a := serviceArgs{
+							ServiceName: s,
+							ServiceTags: tags,
+						}
+						if match(a) {
+							args <- a
+						}
+					}
+				}
+				close(args)
+			}()
 
 			return run(c, c.Args(), args)
 		},

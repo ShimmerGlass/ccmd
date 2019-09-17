@@ -1,20 +1,20 @@
 package commands
 
 import (
-	"fmt"
+	"log"
 	"reflect"
-	"time"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/urfave/cli"
 )
 
 type serviceInstanceArgs struct {
-	NodeName       string   `tmpl:"node_name" bexpr:"node_name"`
-	ServiceName    string   `tmpl:"service_name" bexpr:"service_name"`
-	ServiceTags    []string `tmpl:"service_tags" bexpr:"service_tags"`
-	InstanceID     string   `tmpl:"instance_id" bexpr:"instance_id"`
-	InstanceHealth string   `tmpl:"instance_health" bexpr:"instance_health"`
+	NodeName       string            `tmpl:"node_name" bexpr:"node_name"`
+	ServiceName    string            `tmpl:"service_name" bexpr:"service_name"`
+	ServiceTags    []string          `tmpl:"service_tags" bexpr:"service_tags"`
+	NodeMeta       map[string]string `tmpl:"node_meta" bexpr:"node_meta"`
+	InstanceID     string            `tmpl:"instance_id" bexpr:"instance_id"`
+	InstanceHealth string            `tmpl:"instance_health" bexpr:"instance_health"`
 }
 
 func init() {
@@ -22,59 +22,74 @@ func init() {
 		Name:      "service",
 		Usage:     "Runs the commmand passed as argument for each service instances",
 		UsageText: modelHelp(reflect.ValueOf(serviceInstanceArgs{})),
-		ArgsUsage: "[SERVICE] [CMD...]",
+		ArgsUsage: "[CMD...]",
 		Flags: []cli.Flag{
-			dcFlag,
+			dcsFlag,
+			allDcsFlag,
 			filterFlag,
-			watchFlag,
+			cli.StringSliceFlag{
+				Name:  "service",
+				Usage: "Service to target. Can be specified multiple times",
+			},
+			cli.BoolFlag{
+				Name:  "all-services",
+				Usage: "Target all services",
+			},
 		},
 		Action: func(c *cli.Context) error {
 			consul := getConsul(c)
+			args := make(chan interface{})
+			match := filter(c, serviceInstanceArgs{})
 
-			if len(c.Args()) == 0 {
-				return fmt.Errorf("please provide the service as first argument")
-			}
+			go func() {
 
-			service := c.Args()[0]
+				dcs := getDcs(c, consul)
 
-			var idx uint64
-			for {
-				svcs, meta, err := consul.Health().Service(service, "", false, &api.QueryOptions{
-					WaitIndex:  idx,
-					WaitTime:   10 * time.Minute,
-					Datacenter: c.String("dc"),
-				})
-				if err != nil {
-					return err
+				for _, dc := range dcs {
+					var services []string
+					if c.Bool("all-services") {
+						svcs, _, err := consul.Catalog().Services(&api.QueryOptions{
+							Datacenter: dc,
+						})
+						if err != nil {
+							log.Fatal(err)
+						}
+						for s := range svcs {
+							services = append(services, s)
+						}
+					} else if len(c.StringSlice("service")) > 0 {
+						services = c.StringSlice("service")
+					} else {
+						log.Fatal("No service specified, please use --service or --all-services")
+					}
+
+					for _, service := range services {
+						svcs, _, err := consul.Health().Service(service, "", false, &api.QueryOptions{
+							Datacenter: dc,
+						})
+						if err != nil {
+							log.Fatal(err)
+						}
+						for _, d := range svcs {
+							a := serviceInstanceArgs{
+								NodeName:       d.Node.Node,
+								NodeMeta:       d.Node.Meta,
+								ServiceName:    d.Service.Service,
+								ServiceTags:    d.Service.Tags,
+								InstanceID:     d.Service.ID,
+								InstanceHealth: d.Checks.AggregatedStatus(),
+							}
+							if match(a) {
+								args <- a
+							}
+						}
+					}
 				}
-				idx = meta.LastIndex
 
-				args := []interface{}{}
-				for _, d := range svcs {
-					args = append(args, serviceInstanceArgs{
-						NodeName:       d.Node.Node,
-						ServiceName:    d.Service.Service,
-						ServiceTags:    d.Service.Tags,
-						InstanceID:     d.Service.ID,
-						InstanceHealth: d.Checks.AggregatedStatus(),
-					})
-				}
+				close(args)
+			}()
 
-				args, err = filter(c, args, []serviceInstanceArgs{})
-				if err != nil {
-					return err
-				}
-
-				err = run(c, c.Args()[1:], args)
-				if err != nil {
-					return err
-				}
-				if !c.Bool("watch") {
-					break
-				}
-			}
-
-			return nil
+			return run(c, c.Args(), args)
 		},
 	})
 

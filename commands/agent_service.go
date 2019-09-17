@@ -26,13 +26,13 @@ func init() {
 				return err
 			}
 
-			args := []interface{}{}
+			args := make(chan interface{}, len(svcs))
 			for _, d := range svcs {
-				args = append(args, agentServiceArgs{
+				args <- agentServiceArgs{
 					ServiceName: d.Service,
 					ServiceID:   d.ID,
 					ServicePort: d.Port,
-				})
+				}
 			}
 
 			return run(c, c.Args(), args)

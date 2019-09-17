@@ -1,8 +1,8 @@
 package commands
 
 import (
+	"log"
 	"reflect"
-	"time"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/urfave/cli"
@@ -20,48 +20,41 @@ func init() {
 		UsageText: modelHelp(reflect.ValueOf(serviceInstanceArgs{})),
 		ArgsUsage: "[CMD...]",
 		Flags: []cli.Flag{
-			dcFlag,
+			dcsFlag,
+			allDcsFlag,
 			filterFlag,
-			watchFlag,
 		},
 		Action: func(c *cli.Context) error {
 			consul := getConsul(c)
+			args := make(chan interface{})
+			match := filter(c, nodeArgs{})
 
-			var idx uint64
-			for {
-				nodes, meta, err := consul.Catalog().Nodes(&api.QueryOptions{
-					WaitIndex:  idx,
-					WaitTime:   10 * time.Minute,
-					Datacenter: c.String("dc"),
-				})
-				if err != nil {
-					return err
-				}
-				idx = meta.LastIndex
+			dcs := getDcs(c, consul)
 
-				args := []interface{}{}
-				for _, d := range nodes {
-					args = append(args, nodeArgs{
-						Name: d.Node,
-						Meta: d.Meta,
+			go func() {
+				for _, dc := range dcs {
+					nodes, _, err := consul.Catalog().Nodes(&api.QueryOptions{
+						Datacenter: dc,
 					})
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					for _, d := range nodes {
+						a := nodeArgs{
+							Name: d.Node,
+							Meta: d.Meta,
+						}
+						if match(a) {
+							args <- a
+						}
+					}
 				}
 
-				args, err = filter(c, args, []nodeArgs{})
-				if err != nil {
-					return err
-				}
+				close(args)
+			}()
 
-				err = run(c, c.Args(), args)
-				if err != nil {
-					return err
-				}
-				if !c.Bool("watch") {
-					break
-				}
-			}
-
-			return nil
+			return run(c, c.Args(), args)
 		},
 	})
 

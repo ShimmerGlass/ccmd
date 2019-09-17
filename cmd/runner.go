@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/aestek/ccmd/tmpl"
+	"github.com/prometheus/common/log"
 )
 
 type Options struct {
@@ -17,7 +18,7 @@ type Options struct {
 	NoPrefix bool
 }
 
-func Run(cmd []string, instances []interface{}, opts Options) error {
+func Run(cmd []string, instances chan interface{}, opts Options) error {
 	if len(cmd) == 0 {
 		return runPrint(cmd, instances, opts)
 	}
@@ -29,79 +30,54 @@ func Run(cmd []string, instances []interface{}, opts Options) error {
 		opts.Parallel = len(instances)
 	}
 
-	instanceArgs := make([]map[string]string, len(instances))
-	prefixes := make([]string, len(instances))
-	maxPrefixLength := 0
-
-	for i, inst := range instances {
-		args, err := getArgs(inst)
-		if err != nil {
-			return err
-		}
-		instanceArgs[i] = args
-	}
-
 	cmdt, err := compileCmd(cmd)
 	if err != nil {
 		return err
 	}
 
-	if !opts.NoPrefix {
-		for i, inst := range instanceArgs {
-			a := cmdArgs(cmdt, inst)
-			p := getVarsDesc(a, true)
-			if len(p) > maxPrefixLength {
-				maxPrefixLength = len(p)
-			}
-			prefixes[i] = p
-		}
-	}
-
-	writer := &consoleWriter{
-		maxPrefixLength: maxPrefixLength,
-	}
+	writer := &consoleWriter{}
 
 	var wg sync.WaitGroup
 	wg.Add(opts.Parallel)
 
-	type instance struct {
-		args map[string]string
-		idx  int
-	}
-	c := make(chan instance)
-
 	for i := 0; i < opts.Parallel; i++ {
 		go func() {
-			for i := range c {
+			defer wg.Done()
+
+			for i := range instances {
+				args, err := getArgs(i)
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+
+				a := cmdArgs(cmdt, args)
+				p := getVarsDesc(a, true)
+
+				if len(p) > writer.maxPrefixLength {
+					writer.maxPrefixLength = len(p)
+				}
+
 				var stdOut io.Writer = os.Stdout
 				var stdErr io.Writer = os.Stderr
+
 				if !opts.NoPrefix {
-					stdOut = &writerAdapter{target: os.Stdout, inner: writer, prefix: prefixes[i.idx]}
-					stdErr = &writerAdapter{target: os.Stderr, inner: writer, prefix: prefixes[i.idx]}
+					stdOut = &writerAdapter{target: os.Stdout, inner: writer, prefix: p}
+					stdErr = &writerAdapter{target: os.Stderr, inner: writer, prefix: p}
 				}
-				runOne(cmdt, i.args, stdOut, stdErr)
+
+				runOne(cmdt, args, stdOut, stdErr)
 			}
-			wg.Done()
 		}()
 	}
-
-	go func() {
-		for i, args := range instanceArgs {
-			c <- instance{
-				args: args,
-				idx:  i,
-			}
-		}
-		close(c)
-	}()
 
 	wg.Wait()
 
 	return nil
 }
 
-func runPrint(cmd []string, instances []interface{}, opts Options) error {
-	for _, inst := range instances {
+func runPrint(cmd []string, instances chan interface{}, opts Options) error {
+	for inst := range instances {
 		args, err := getArgs(inst)
 		if err != nil {
 			return err

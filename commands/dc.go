@@ -23,11 +23,11 @@ func init() {
 				return err
 			}
 
-			args := []interface{}{}
+			args := make(chan interface{}, len(dcs))
 			for _, d := range dcs {
-				args = append(args, dcArgs{
+				args <- dcArgs{
 					DC: d,
-				})
+				}
 			}
 
 			return run(c, c.Args(), args)
