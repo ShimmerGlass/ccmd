@@ -89,7 +89,12 @@ func init() {
 				close(args)
 			}()
 
-			return run(c, c.Args(), args)
+			err := run(c, c.Args(), args)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			return nil
 		},
 	})
 

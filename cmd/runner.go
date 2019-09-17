@@ -26,9 +26,6 @@ func Run(cmd []string, instances chan interface{}, opts Options) error {
 	if opts.Parallel == 0 {
 		opts.Parallel = 1
 	}
-	if opts.Parallel == -1 {
-		opts.Parallel = len(instances)
-	}
 
 	cmdt, err := compileCmd(cmd)
 	if err != nil {
@@ -38,37 +35,49 @@ func Run(cmd []string, instances chan interface{}, opts Options) error {
 	writer := &consoleWriter{}
 
 	var wg sync.WaitGroup
-	wg.Add(opts.Parallel)
 
-	for i := 0; i < opts.Parallel; i++ {
-		go func() {
-			defer wg.Done()
+	var sem chan struct{}
+	if opts.Parallel > 0 {
+		sem = make(chan struct{}, opts.Parallel)
+		for i := 0; i < opts.Parallel; i++ {
+			sem <- struct{}{}
+		}
+	}
 
-			for i := range instances {
-				args, err := getArgs(i)
-				if err != nil {
-					log.Error(err)
-					continue
-				}
+	for instance := range instances {
+		if opts.Parallel > 0 {
+			<-sem
+		}
+		wg.Add(1)
+		go func(instance interface{}) {
+			defer func() {
+				wg.Done()
+				sem <- struct{}{}
+			}()
 
-				a := cmdArgs(cmdt, args)
-				p := getVarsDesc(a, true)
-
-				if len(p) > writer.maxPrefixLength {
-					writer.maxPrefixLength = len(p)
-				}
-
-				var stdOut io.Writer = os.Stdout
-				var stdErr io.Writer = os.Stderr
-
-				if !opts.NoPrefix {
-					stdOut = &writerAdapter{target: os.Stdout, inner: writer, prefix: p}
-					stdErr = &writerAdapter{target: os.Stderr, inner: writer, prefix: p}
-				}
-
-				runOne(cmdt, args, stdOut, stdErr)
+			args, err := getArgs(instance)
+			if err != nil {
+				log.Error(err)
+				return
 			}
-		}()
+
+			a := cmdArgs(cmdt, args)
+			p := getVarsDesc(a, true)
+
+			if len(p) > writer.maxPrefixLength {
+				writer.maxPrefixLength = len(p)
+			}
+
+			var stdOut io.Writer = os.Stdout
+			var stdErr io.Writer = os.Stderr
+
+			if !opts.NoPrefix {
+				stdOut = &writerAdapter{target: os.Stdout, inner: writer, prefix: p}
+				stdErr = &writerAdapter{target: os.Stderr, inner: writer, prefix: p}
+			}
+
+			runOne(cmdt, args, stdOut, stdErr)
+		}(instance)
 	}
 
 	wg.Wait()
