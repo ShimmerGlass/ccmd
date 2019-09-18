@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -xue
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+cd $DIR/..
+
+TAG=$(git describe --exact-match --tags $(git log -n1 --pretty='%h'))
+
+GOOS=linux go build -o ccmd
+tar czf ccmd_${TAG}_linux.tar.gz ccmd
+rm ccmd
+
+GOOS=darwin go build -o ccmd
+tar czf ccmd_${TAG}_macos.tar.gz ccmd
+rm ccmd
