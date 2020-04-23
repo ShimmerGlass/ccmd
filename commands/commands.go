@@ -5,9 +5,9 @@ import (
 	"log"
 	"reflect"
 
-	"github.com/aestek/ccmd/cmd"
 	"github.com/hashicorp/consul/api"
 	"github.com/hashicorp/go-bexpr"
+	"github.com/shimmerglass/ccmd/cmd"
 	"github.com/urfave/cli"
 )
 

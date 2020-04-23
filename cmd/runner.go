@@ -9,8 +9,8 @@ import (
 
 	"strings"
 
-	"github.com/aestek/ccmd/tmpl"
 	"github.com/prometheus/common/log"
+	"github.com/shimmerglass/ccmd/tmpl"
 )
 
 type Options struct {

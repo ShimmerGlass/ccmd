@@ -1,4 +1,4 @@
-module github.com/aestek/ccmd
+module github.com/shimmerglass/ccmd
 
 go 1.12
 

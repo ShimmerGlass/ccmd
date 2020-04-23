@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/aestek/ccmd/commands"
+	"github.com/shimmerglass/ccmd/commands"
 	"github.com/urfave/cli"
 )
 

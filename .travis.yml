@@ -1,20 +1,20 @@
 language: go
-go_import_path: github.com/aestek/ccmd
+go_import_path: github.com/shimmerglass/ccmd
 go:
-- 1.x
+  - 1.x
 script:
-- mkdir -p build/linux
-- env GO111MODULE=on GOOS=linux go build -o build/linux/ccmd
-- mkdir -p build/windows
-- env GO111MODULE=on GOOS=windows go build -o build/windows/ccmd.exe
-- mkdir -p build/darwin
-- env GO111MODULE=on GOOS=darwin go build -o build/darwin/ccmd
+  - mkdir -p build/linux
+  - env GO111MODULE=on GOOS=linux go build -o build/linux/ccmd
+  - mkdir -p build/windows
+  - env GO111MODULE=on GOOS=windows go build -o build/windows/ccmd.exe
+  - mkdir -p build/darwin
+  - env GO111MODULE=on GOOS=darwin go build -o build/darwin/ccmd
 sudo: false
 before_deploy:
-- echo "Deploying $TRAVIS_TAG to GitHub releases"
-- cd build/linux && tar czf ccmd.linux.amd64.tar.gz * && cd -
-- cd build/windows && tar czf ccmd.windows.amd64.tar.gz * && cd -
-- cd build/darwin && tar czf ccmd.darwin.amd64.tar.gz * && cd -
+  - echo "Deploying $TRAVIS_TAG to GitHub releases"
+  - cd build/linux && tar czf ccmd.linux.amd64.tar.gz * && cd -
+  - cd build/windows && tar czf ccmd.windows.amd64.tar.gz * && cd -
+  - cd build/darwin && tar czf ccmd.darwin.amd64.tar.gz * && cd -
 deploy:
   provider: releases
   api_key:
@@ -22,5 +22,5 @@ deploy:
   file: build/*/*.tar.gz
   skip_cleanup: true
   on:
-    repo: Aestek/ccmd
+    repo: shimmerglass/ccmd
     tags: true
